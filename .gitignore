@@ -1,0 +1,10 @@
+/docs/
+/lib/
+/bin/
+/.shards/
+*.dwarf
+public
+.editorconfig
+dist
+shard.lock
+node_modules
