@@ -10,6 +10,12 @@ Crystaldrive is based on [Filebrowser](https://filebrowser.org/)
 ## Run
 ```
 shards install
+```
+export JWT_SECRET_KEY="{blah}" # for jwt tokens
+export SESSION_SECRET_KEY="{blah}"
+export SEED="sY4dAEWZXsPQEMOHzP65hNeDr4+7D0D6fbEm2In22t0="  # 3botlogin seed
+export OPEN_KYC_URL=https://openkyc.live/verification/verify-sei
+export THREEBOT_LOGIN_URL=https://login.threefold.me
+```
 crystal  run src/crystaldrive.cr
 ```
-

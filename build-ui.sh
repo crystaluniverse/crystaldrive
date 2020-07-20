@@ -1,10 +1,10 @@
 #!/bin/bash
 
-sudo apt install -y git npm
+#sudo apt install -y git npm
 pushd .
 cd frontend
 sed -i 's/'"'"'\[{\[ .StaticURL \]}\]/'"'"'\/static/g' vue.config.js
-npm install
+#npm install
 npm run build
 popd
 rm -rf public
