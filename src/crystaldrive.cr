@@ -139,7 +139,13 @@ post "/api/renew" do |env|
     halt env, status_code: 403, response: "403 Forbidden"
   end
   
-  token = CrystalDrive::Token.generate_token(current_user, current_email, "en", "mosaic", {"admin" => true, "execute" => true, "create" => true, "rename" => true, "modify" => true, "delete" => true,  "share" => true, "download"=> true}, false, Array(String).new)
+  
+  viewmode = env.session.string?("viewmode")
+  if viewmode.nil?
+    viewmode = "mosaic"
+  end
+
+  token = CrystalDrive::Token.generate_token(current_user, current_email, "en", viewmode, {"admin" => true, "execute" => true, "create" => true, "rename" => true, "modify" => true, "delete" => true,  "share" => true, "download"=> true}, false, Array(String).new)
   env.session.string("token", token)
   token
 end
@@ -380,6 +386,28 @@ get "/api/preview/big/*" do |env|
   env.response.content_length = f.file.meta.not_nil!.size
   
   send_file  env, s, filename: f.filename, disposition: "inline", mime_type: f.content_type
+end
+
+put "/api/users/:username" do |env|
+  if env.session.string?("username") != env.params.url["username"]
+    halt env, status_code: 403, response: "403 Forbidden"
+  end
+  
+  begin
+    vm =  env.session.string?("viewmode")
+    
+    if vm == "mosaic"
+      vm = "list"
+    else
+      vm = "mosaic"
+    end
+    pp! vm
+    env.session.string("viewmode", vm)
+
+  rescue exception
+    halt env, status_code: 409, response: "ca not update user settings"
+  end
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
 end
 
 Kemal.run
