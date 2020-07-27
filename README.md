@@ -5,7 +5,17 @@ Crystaldrive is based on [Filebrowser](https://filebrowser.org/)
 
 ## Build ui
 
-`./build-ui.sh`
+First time run `./build.sh -u` to install all frontend dependencies & build UI
+later on just run `./build.sh -f` to build frontend files only
+
+## build script
+```
+./build.sh 
+usage: ./build -u --ui (Install all dependencies and build ui
+       ./build -a --all (Fully install UI requirements, build UI and build server binaries)
+       ./build -f --front (Only build frontend code no dependencies will be installed)
+
+```
 
 ## Run
 ```

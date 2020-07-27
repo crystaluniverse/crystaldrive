@@ -31,6 +31,7 @@ class CrystalDrive::Token
             end
         rescue JWT::ExpiredSignatureError
         rescue JWT::VerificationError
+        rescue JWT::DecodeError
         end
         return false
     end

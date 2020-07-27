@@ -8,3 +8,6 @@ public
 dist
 shard.lock
 node_modules
+crystaldrive
+package-lock.json
+frontend

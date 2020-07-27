@@ -135,7 +135,6 @@ post "/api/renew" do |env|
   end
   provided_token = env.request.headers["X-Auth"]
   
-  
   if !CrystalDrive::Token.is_valid? provided_token.not_nil!, current_user, current_email
     halt env, status_code: 403, response: "403 Forbidden"
   end
