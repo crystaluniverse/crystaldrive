@@ -22,6 +22,7 @@ class CrystalDrive::Item
     property extension : String = ""
     property modified : String  = Time.utc.to_s("%Y-%m-%dT%H:%M:%S")
     property mode : UInt16 = 420
+    property key : String = ""
 
     @[JSON::Field(key: "isDir")]
     property is_dir : Bool = false

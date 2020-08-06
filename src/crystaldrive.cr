@@ -8,9 +8,10 @@ require "./init"
 require "./backend"
 require "crystalstore"
 require "./auth"
+require "./docserver"
 
 include CrystalDrive::Init
-
+include CrystalDrive::DocServer
 
 HOME = File.read("public/static/index.html").
   gsub("[{[ .StaticURL ]}]", "/static").
@@ -22,6 +23,7 @@ HOME = File.read("public/static/index.html").
   gsub(%(name=msapplication-TileImage), %(name="msapplication-TileImage")).
   gsub(%(fullStaticURL + ), "").
   gsub(%(name=msapplication-TileColor content=#2979ff), %(name="msapplication-TileColor" content="#2979ff")).
+  gsub(%([{[ .ONLY_OFFICE_URL ]}]), ENV["ONLY_OFFICE_HOST"]).
   gsub(%(`[{[ .Json ]}]`), %(`{
     "AuthMethod": "json",
     "BaseURL": "",
@@ -89,7 +91,16 @@ end
 
 before_all "/api/*" do |env|
   if env.session.string?("username").nil?
-    halt env, status_code: 403, response: "403 Forbidden"
+    if !env.params.query.has_key?("auth")
+      halt env, status_code: 403, response: "403 Forbidden"
+    else
+      begin
+        username = CrystalDrive::Token.get_usermame(env.params.query["auth"])
+        env.session.string("username", username.to_s)
+      rescue exception
+        halt env, status_code: 403, response: "403 Forbidden"
+      end 
+    end
   end
 end
 

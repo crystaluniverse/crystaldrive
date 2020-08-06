@@ -72,6 +72,7 @@ class CrystalDrive::Backend
         parts.delete_at(1)
         path = Path.new parts
         item = CrystalDrive::Item.new
+        item.key = file_meta.not_nil!.id.not_nil!.to_s
         item.name = file_meta.not_nil!.name.not_nil!
         item.size = file_meta.not_nil!.size
         item.path = path.to_s
@@ -108,6 +109,7 @@ class CrystalDrive::Backend
 
         files.each do |file|
             item = CrystalDrive::Item.new
+            item.key = file.id.not_nil!.to_s
             item.name = file.meta.not_nil!.name.not_nil!
             item.size = file.meta.not_nil!.size
             item.path = Path.new("/", item.name).to_s

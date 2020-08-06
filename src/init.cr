@@ -10,6 +10,14 @@ require "./backend"
 module CrystalDrive::Init
     include Threebot
 
+    if !ENV.has_key?("ONLY_OFFICE_DATA_PATH")
+        raise "Missing Environment Variable ONLY_OFFICE_DATA_PATH"
+    end
+
+    if !ENV.has_key?("ONLY_OFFICE_HOST")
+        raise "Missing Environment Variable ONLY_OFFICE_HOST"
+    end
+
     if !ENV.has_key?("JWT_SECRET_KEY")
         raise "Missing Environment Variable JWT_SECRET_KEY"
     end

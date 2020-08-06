@@ -20,12 +20,12 @@ class CrystalDrive::Token
                 "iss" => "Crystal Drive"
             },
             
-            ENV["SECRET_KEY"], JWT::Algorithm::HS256)
+            ENV["JWT_SECRET_KEY"], JWT::Algorithm::HS256)
     end
 
     def self.is_valid?(token, username, email)
         begin
-            payload, _ = JWT.decode(token, ENV["SECRET_KEY"], JWT::Algorithm::HS256)
+            payload, _ = JWT.decode(token, ENV["JWT_SECRET_KEY"], JWT::Algorithm::HS256)
             if payload["user"]["id"] == username
                 return true
             end
@@ -34,5 +34,10 @@ class CrystalDrive::Token
         rescue JWT::DecodeError
         end
         return false
+    end
+
+    def self.get_usermame(token)
+        payload, _ = JWT.decode(token, ENV["JWT_SECRET_KEY"], JWT::Algorithm::HS256)
+        return payload["user"]["id"]
     end
 end
