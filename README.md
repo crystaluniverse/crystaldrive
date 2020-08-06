@@ -27,6 +27,8 @@ docker run -i -t -d -p 80:80 -v /home/hamdy/onlyoffice/data:/var/www/onlyoffice/
 shards install
 
 ```
+
+```
 export JWT_SECRET_KEY="{blah}" # for jwt tokens
 export SESSION_SECRET_KEY="{blah}"
 export SEED="sY4dAEWZXsPQEMOHzP65hNeDr4+7D0D6fbEm2In22t0="  # 3botlogin seed
@@ -36,5 +38,6 @@ export ONLY_OFFICE_DATA_PATH=/home/hamdy/onlyoffice/data
 export ONLY_OFFICE_HOST=127.0.0.1
 ```
 
+```
 crystal  run src/crystaldrive.cr
 ```

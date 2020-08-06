@@ -8,6 +8,7 @@ require "./init"
 require "./backend"
 require "crystalstore"
 require "./auth"
+require "./errors"
 require "./docserver"
 
 include CrystalDrive::Init
@@ -86,6 +87,23 @@ end
 
 # prefix all paths with user dir
 private def prefix_paths(env, path)
+  is_dir = path.ends_with?("/")
+  parts = Path.new(path).parts
+  shared = false
+
+  if parts.size > 1 && parts[1] == "shared"
+    shared = true
+    parts[1] = CrystalDrive::Backend.get_shared_with_me_dirname
+  end
+  path = Path.new(parts).to_s
+  if is_dir
+    path = "#{path}/"
+  end
+
+  if shared && parts.size > 4
+    return path.sub("/#{CrystalDrive::Backend.get_shared_with_me_dirname}", "")
+  end
+
   %(/#{env.session.string("username")}#{path})
 end
 
@@ -131,7 +149,24 @@ end
 # Login
 post "/api/login" do |env|
   env.response.content_type = "cty"
-  halt env, status_code: 403, response: "403 Forbidden"
+  # halt env, status_code: 403, response: "403 Forbidden"
+  username = "h4mdy"
+  email = "kk@sd.com"
+  token = CrystalDrive::Token.generate_token(username, email, "en", "mosaic", {"admin" => true, "execute" => true, "create" => true, "rename" => true, "modify" => true, "delete" => true,  "share" => true, "download"=> true}, false, Array(String).new)
+  env.session.string("token", token)
+  env.session.string("username", username)
+  env.session.string("email", email)
+
+  begin
+      CrystalDrive::Backend.dir_create(username, 755)
+  rescue CrystalStore::FileExistsError
+  end
+
+  begin
+      CrystalDrive::Backend.create_shared_withme_dir(username)
+  rescue CrystalStore::FileExistsError
+  end
+  token
 end
 
 # Renew
@@ -244,7 +279,17 @@ delete "/api/resources/*" do |env|
   env.response.content_type = "text/plain; charset=utf-8"
   env.response.headers["X-Renew-Token"] = "true"
   env.response.headers["X-Content-Type-Options"] ="nosniff"
-  if path.ends_with?("/")
+  
+  parts = Path.new(path).parts
+
+  if path.includes?(CrystalDrive::Backend.get_shared_with_me_dirname) && parts.size > 4
+    begin
+      CrystalDrive::Backend.link_delete(path)
+    rescue CrystalStore::FileNotFoundError
+      halt env, status_code: 409, response: "Link not found"
+    end
+  
+  elsif path.ends_with?("/")
     begin
       CrystalDrive::Backend.dir_delete(path)
     rescue CrystalStore::FileNotFoundError
@@ -412,13 +457,121 @@ put "/api/users/:username" do |env|
     else
       vm = "mosaic"
     end
-    pp! vm
     env.session.string("viewmode", vm)
 
   rescue exception
     halt env, status_code: 409, response: "ca not update user settings"
   end
   env.response.headers.add("X-Content-Type-Options", "nosniff")
+end
+
+# List user shared dirs & files
+get "/files/shared" do |env|
+
+end
+
+# add/update permissions
+post "/api/share/*" do |env|
+  file = URI.decode(env.request.path.sub("/api/share", ""))
+  file = prefix_paths(env, file)
+  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.headers.add("X-Renew-Token", "true")
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
+
+  is_file = CrystalDrive::Backend.file_exists? file
+  is_dir = CrystalDrive::Backend.dir_exists? file
+
+  if ! is_file && ! is_dir
+    halt env, status_code: 409, response: "not found"
+  end
+
+  users = []of String
+  env.params.json["users"].as(Array).each do |username|
+    users << username.to_s
+  end
+
+  permission = env.params.json["permission"].as(String)
+  CrystalDrive::Backend.share(file, env.session.string("username"), users, permission)
+end
+
+get "/api/share/*" do |env|
+  file = URI.decode(env.request.path.sub("/api/share", ""))
+  file = prefix_paths(env, file)
+  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.headers.add("X-Renew-Token", "true")
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
+
+  is_file = CrystalDrive::Backend.file_exists? file
+  is_dir = CrystalDrive::Backend.dir_exists? file
+
+  if ! is_file && ! is_dir
+    halt env, status_code: 409, response: "not found"
+  end
+
+  begin
+    share = CrystalDrive::Backend.share_get(file)
+    share.to_json
+  rescue CrystalDrive::UserNotFoundError
+    halt env, status_code: 409, response: "not found"
+  end
+end
+
+delete "/api/share/*" do |env|
+  file = URI.decode(env.request.path.sub("/api/share", ""))
+  file = prefix_paths(env, file)
+  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.headers.add("X-Renew-Token", "true")
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
+
+  is_file = CrystalDrive::Backend.file_exists? file
+  is_dir = CrystalDrive::Backend.dir_exists? file
+
+  if ! is_file && ! is_dir
+    halt env, status_code: 409, response: "not found"
+  end
+    CrystalDrive::Backend.share_delete(file)
+end
+
+get "/api/share/link/*" do |env|
+  file = URI.decode(env.request.path.sub("/api/share", ""))
+  file = prefix_paths(env, file)
+  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.headers.add("X-Renew-Token", "true")
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
+
+  is_file = CrystalDrive::Backend.file_exists? file
+  is_dir = CrystalDrive::Backend.dir_exists? file
+
+  if env.get?("permission").nil?
+    halt env, status_code: 409, response: "Permission missing"
+  end
+
+  if ! is_file && ! is_dir
+    halt env, status_code: 409, response: "not found"
+  end
+
+  begin
+    CrystalDrive::Backend.share_link_create(file, env.get("permission").as(String), env.session.string("username"))
+  rescue CrystalDrive::NotFoundError
+    halt env, status_code: 409, response: "not found"
+  end
+end
+
+get "/shared/:uuid" do |env|
+  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.headers.add("X-Renew-Token", "true")
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
+
+  begin
+    o = CrystalDrive::Backend.share_link_get(env.params.url["uuid"])
+    path = o.path
+    CrystalDrive::Backend.share(o.path, o.owner, [env.session.string("username")], o.permission)
+    # rediect to user shared dir
+    env.response.status_code = 302
+    env.response.headers.add("Location", "/files/shared/#{o.owner}")
+  rescue CrystalDrive::NotFoundError
+    halt env, status_code: 409, response: "not found"
+  end
 end
 
 Kemal.run

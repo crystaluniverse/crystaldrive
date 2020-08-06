@@ -69,9 +69,6 @@ module CrystalDrive::Init
         end
     end
 
-    
-
-
     # After successful login with 3 bot
     def threebot_login(env, email, username)
         username = username.sub(".3bot", "")
@@ -80,8 +77,15 @@ module CrystalDrive::Init
         env.session.string("username", username)
         env.session.string("email", email)
 
+        CrystalDrive::Backend.user_add username: username, email: email
+        
         begin
             CrystalDrive::Backend.dir_create(username, 755)
+        rescue CrystalStore::FileExistsError
+        end
+
+        begin
+            CrystalDrive::Backend.create_shared_withme_dir(username)
         rescue CrystalStore::FileExistsError
         end
         token

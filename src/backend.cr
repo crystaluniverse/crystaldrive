@@ -3,6 +3,12 @@ require "./models"
 
 class CrystalDrive::Backend
     STORE = CrystalStore::Store.new
+    
+    @@shared_with_me_dirname = "1eba81a9-6086-4489-a176-b99abb27aecf"
+
+    def self.get_shared_with_me_dirname
+        @@shared_with_me_dirname
+    end
 
     private def self.is_file(path : String)
         return false
@@ -24,6 +30,14 @@ class CrystalDrive::Backend
         end
     end
 
+    def self.shared(path : String)
+        self.dir_list("#{path}/#{@@shared_with_me_dirname}")
+    end
+
+    def self.create_shared_withme_dir(user)
+        self.dir_create("#{user}/#{@@shared_with_me_dirname}", 777)
+    end
+
     def self.dir_create(path : String, mode : Int16, create_parents : Bool = false)
         STORE.dir_create path: path, mode: mode, create_parents: create_parents
     end
@@ -38,6 +52,10 @@ class CrystalDrive::Backend
 
     def self.dir_move(src : String, dest : String)
         STORE.dir_move src: src, dest: dest
+    end
+
+    def self.dir_exists?(path : String)
+        STORE.dir_exists? path: path
     end
 
     def self.file_create(path : String, mode : Int16, content_type : String, create_parents : Bool = false)
@@ -64,12 +82,21 @@ class CrystalDrive::Backend
         STORE.file_move src: src, dest: dest
     end
 
+    def self.link_delete(path : String)
+        STORE.unlink path
+    end
+
     def self.file_stats(path : String)
         file_meta = STORE.file_stats path: path
         file_meta = file_meta.not_nil!
 
         parts = Path.new(path).parts
         parts.delete_at(1)
+
+        if parts.size > 1 && parts[1] == @@shared_with_me_dirname
+            parts[1] = "shared"
+        end
+
         path = Path.new parts
         item = CrystalDrive::Item.new
         item.key = file_meta.not_nil!.id.not_nil!.to_s
@@ -85,18 +112,40 @@ class CrystalDrive::Backend
     end 
 
     def self.list(path : String = "/")
+        is_root = (path == "/")
         path = Path.new("/", path)
+        parts = path.parts
         basename = path.basename
         list  = STORE.dir_list(path.to_s)
         files = list.files
         dirs = list.dirs
+        # resolve links (files or dirs)
 
-        parts = path.parts
+        list.links.each do |link|
+            if link.is_dir
+                meta = STORE.dir_stats(link.src)
+                pointer = CrystalStore::DirPointer.new id: 0_u64, name: link.name, meta: meta
+                dirs << pointer
+            else
+                file_meta = STORE.file_stats(link.src)
+                file = CrystalStore::File.new basename, meta: file_meta
+                files << file
+            end
+        end
+
         parts.delete_at(1)
+        
+        if parts.size > 1 && parts[1] == @@shared_with_me_dirname
+            parts[1] = "shared"
+            basename = "Shared"
+        end
+
         path = Path.new parts
+        
         if path.to_s == "/"
             basename = ""
         end
+        
         result = CrystalDrive::DirList.new
         result.size = list.size
         result.modified = Time.unix(list.last_modified).to_s("%Y-%m-%dT%H:%M:%S")
@@ -122,6 +171,12 @@ class CrystalDrive::Backend
         end
 
         dirs.each do |dir|
+            # skip shared with me directory
+            if dir.name == @@shared_with_me_dirname
+                result.num_dirs -= 1_u64 # skip shared with me 
+                next
+            end
+
             item = CrystalDrive::Item.new
             item.name = dir.meta.not_nil!.name.not_nil!
             item.size = dir.meta.not_nil!.size
@@ -139,5 +194,61 @@ class CrystalDrive::Backend
 
     def self.stats(path : String)
         self.is_file(path) ? STORE.file_stats(path) : STORE.dir_stats(path)
+    end
+
+    def self.share(path : String, current_user : String, users : Array(String), permission : String)
+        permissions = Hash(String, String).new
+        users.each do |user|
+            permissions[user] = permission
+        end
+        begin
+            share = CrystalDrive::Share.get(STORE.db, path)
+            share.permissions.merge(permissions)
+            to_delete = []of String
+            share.permissions.each do |user, perm|
+                if !permissions.includes?(user)
+                    to_delete << user
+                end
+            end
+            to_delete.each do |user|
+                share.permissions.delete(user)
+            end
+
+        rescue CrystalDrive::UserNotFoundError
+            share = CrystalDrive::Share.new path: path, permissions: permissions
+
+        end
+
+        share.save(STORE.db)
+        basename = Path.new(path).basename
+
+        users.each do |user|
+            begin
+                STORE.dir_create("/#{user}/#{@@shared_with_me_dirname}/#{current_user}", 755)
+            rescue CrystalStore::FileExistsError
+            end
+            STORE.symlink src: path, dest: "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
+        end
+    end
+
+    def self.share_get(path : String)
+        CrystalDrive::Share.get(STORE.db, path)
+    end
+
+    def self.share_delete(path : String)
+        CrystalDrive::Share.delete(STORE.db, path)
+    end
+
+    def self.share_link_create(path : String, permission : String, owner : String)
+        CrystalDrive::ShareLink.new(path, permission, owner)
+    end
+
+    def self.share_link_get(uuid : String)
+        CrystalDrive::ShareLink.get(STORE.db, uuid)
+    end
+
+    def self.user_add(username : String, email : String)
+        u = CrystalDrive::AuthUser.new username: username, email: email
+        u.save(STORE.db)
     end
 end
