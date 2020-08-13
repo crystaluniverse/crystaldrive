@@ -70,10 +70,11 @@ class CrystalDrive::Share < CrystalDrive::Model
     def self.get(db : Bcdb::Client, path : String)
         ids = db.find({"share" => path})
         if ids.size == 0
-           raise  CrystalDrive::NotFoundError.new
+           p = Hash(String, String).new
+           return self.new(path, p)
         end
         o = self.get(db, ids[0].to_u64)
-        o.id = ids[0].to_u64
+        o.id = ids[0]
         o
     end
 
@@ -85,27 +86,9 @@ class CrystalDrive::Share < CrystalDrive::Model
         end
     end
 
-    def self.delete(db : Bcdb::Client, path : String, id : UInt64? = nil)
+    def self.delete(db : Bcdb::Client, path)
         db.find({"share" => path}).each do |item_id|
-            if id.nil?    
-                db.delete(item_id)
-            elsif id.not_nil! == item_id
-                db.delete(item_id)
-                break
-            end
-        end
-    end
-
-    def self.list(db : Bcdb::Client, path : String)
-        res = db.find({"share" => path})
-        if res.size == 0
-            raise  CrystalDrive::NotFoundError.new
-        else
-            list = [] of self
-            res.each do |id|
-                list << self.get id
-            end
-            return list
+            db.delete(item_id)
         end
     end
 end

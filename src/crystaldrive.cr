@@ -486,13 +486,11 @@ post "/api/share/*" do |env|
     halt env, status_code: 409, response: "not found"
   end
 
-  users = []of String
-  env.params.json["users"].as(Array).each do |username|
-    users << username.to_s
+  shares = Hash(String, String).new
+  env.params.json["_json"].as(Array).each do |item|
+    shares[item["name"].to_s] = item["permission"].to_s
   end
-
-  permission = env.params.json["permission"].as(String)
-  CrystalDrive::Backend.share(file, env.session.string("username"), users, permission)
+  CrystalDrive::Backend.share(file, env.session.string("username"), shares)
 end
 
 get "/api/share/*" do |env|
@@ -511,7 +509,11 @@ get "/api/share/*" do |env|
 
   begin
     share = CrystalDrive::Backend.share_get(file)
-    share.to_json
+    result = Array(Hash(String, String)).new
+    share.permissions.each do |k, v|
+      result << {"name" => k, "permission" => v}
+    end
+    result.to_json
   rescue CrystalDrive::UserNotFoundError
     halt env, status_code: 409, response: "not found"
   end
@@ -566,7 +568,8 @@ get "/shared/:uuid" do |env|
   begin
     o = CrystalDrive::Backend.share_link_get(env.params.url["uuid"])
     path = o.path
-    CrystalDrive::Backend.share(o.path, o.owner, [env.session.string("username")], o.permission)
+    perm = {env.session.string("username") =>  o.permission}
+    CrystalDrive::Backend.share(o.path, o.owner, perm)
     # rediect to user shared dir
     env.response.status_code = 302
     env.response.headers.add("Location", "/files/shared/#{o.owner}")

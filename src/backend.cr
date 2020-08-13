@@ -196,38 +196,46 @@ class CrystalDrive::Backend
         self.is_file(path) ? STORE.file_stats(path) : STORE.dir_stats(path)
     end
 
-    def self.share(path : String, current_user : String, users : Array(String), permission : String)
-        permissions = Hash(String, String).new
-        users.each do |user|
-            permissions[user] = permission
-        end
+    def self.share(path : String, current_user : String, shares : Hash(String, String))
+        newly_added_users = [] of String
+        updated_users = [] of String
+        deleted_users = [] of String
+
         begin
             share = CrystalDrive::Share.get(STORE.db, path)
-            share.permissions.merge(permissions)
-            to_delete = []of String
-            share.permissions.each do |user, perm|
-                if !permissions.includes?(user)
-                    to_delete << user
-                end
-            end
-            to_delete.each do |user|
-                share.permissions.delete(user)
-            end
-
         rescue CrystalDrive::UserNotFoundError
-            share = CrystalDrive::Share.new path: path, permissions: permissions
+            share = CrystalDrive::Share.new path: path, permissions: Hash(String, String).new
+        end
 
+        shares.each do |name, perm|
+            # delete
+            if perm == "" && share.permissions.has_key?(name)
+                share.permissions.delete(name)
+                deleted_users << name
+            # updated
+            elsif share.permissions.has_key?(name)
+                updated_users << name
+                share.permissions[name] = perm
+            # new
+            else
+                newly_added_users << name
+                share.permissions[name] = perm
+            end
         end
 
         share.save(STORE.db)
         basename = Path.new(path).basename
 
-        users.each do |user|
+        newly_added_users.each do |user|
             begin
                 STORE.dir_create("/#{user}/#{@@shared_with_me_dirname}/#{current_user}", 755)
             rescue CrystalStore::FileExistsError
             end
             STORE.symlink src: path, dest: "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
+        end
+
+        deleted_users.each do |user|
+            STORE.unlink "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
         end
     end
 
