@@ -491,6 +491,7 @@ post "/api/share/*" do |env|
     shares[item["name"].to_s] = item["permission"].to_s
   end
   CrystalDrive::Backend.share(file, env.session.string("username"), shares)
+  shares
 end
 
 get "/api/share/*" do |env|

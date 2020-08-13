@@ -234,6 +234,21 @@ class CrystalDrive::Backend
             STORE.symlink src: path, dest: "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
         end
 
+        # work around, when user delete shared items
+        # share object still exist and not deleted
+        # if same folder shared again with them then we need to
+        # do this
+        updated_users.each do |user|
+            begin
+                STORE.dir_create("/#{user}/#{@@shared_with_me_dirname}/#{current_user}", 755)
+            rescue CrystalStore::FileExistsError
+            end
+            begin
+                STORE.symlink src: path, dest: "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
+            rescue CrystalStore::FileExistsError
+            end
+        end
+
         deleted_users.each do |user|
             STORE.unlink "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
         end
