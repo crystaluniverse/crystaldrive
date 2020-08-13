@@ -14,7 +14,7 @@ usage()
 
 while [ "$1" != "" ]; do
     case $1 in
-        -u| --ui )              FULL_UI=$1
+        -u| --ui )              FULL_UI=1
                                 ;;
         -f | --front )          UI=1
                                 ;;

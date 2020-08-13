@@ -129,6 +129,12 @@ get "/" do |env|
 end
 
 # Home
+get "/files" do |env|
+  env.response.content_type = "text/html"
+  HOME  
+end
+
+# Home
 get "/files/*" do |env|
   env.response.content_type = "text/html"
   HOME
@@ -463,11 +469,6 @@ put "/api/users/:username" do |env|
     halt env, status_code: 409, response: "ca not update user settings"
   end
   env.response.headers.add("X-Content-Type-Options", "nosniff")
-end
-
-# List user shared dirs & files
-get "/files/shared" do |env|
-
 end
 
 # add/update permissions
