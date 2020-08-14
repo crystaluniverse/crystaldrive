@@ -96,57 +96,94 @@ end
 
 class CrystalDrive::ShareLink < CrystalDrive::Model
     include JSON::Serializable
-
-    property permission : String
     property path : String
-    property uuid : String
-    property owner : String
+    property id : UInt64 = 0_u64
+    property links : Hash(String, String) = Hash(String, String).new
+    property owner : String = ""
 
-    def initialize(
-        @path,
-        @permission,
-        @owner
-    )
+    def initialize(@path, @owner); end
 
-    @uuid = UUID.random.to_s
-    end
-
-    def self.get(db : Bcdb::Client, uuid : String)
-        ids = db.find({"uuid" => uuid})
+    def self.get(db : Bcdb::Client, path : String, permission : String, owner : String)
+        ids = db.find({"share" => path, "shared_links" => "1"})
         if ids.size == 0
-           raise  CrystalDrive::NotFoundError.new
-        end
-        o = self.get(db, ids[0].to_u64)
-        o
-    end
-
-    def save(db : Bcdb::Client)
-        db.put(self.dumps, {"share" => @path, "uuid" => @uuid})
-    end
-
-    def self.delete(db : Bcdb::Bcdb::Client, path : String, uuid : String = "")
-        if uuid.size == 0
-            db.find({"share" => path}).each do |item_id|
-                db.delete(item_id)
-            end
+            o = self.new(path, owner)
+            o.links[permission] = UUID.random.to_s
+            key = db.put(o.dumps, {"share" => path, "shared_links" => "1", o.links[permission] => "1"})
+            o.id = key
         else
-            db.find({"share" => path, "uuid" => uuid}).each do |item_id|
-                db.delete(item_id)
+            o = self.get(db, ids[0].to_u64)
+            o.id = ids[0]
+            if !o.links.has_key?(permission)
+                o.links[permission] = UUID.random.to_s
+                db.update(ids[0], o.dumps, {"share" => path, "shared_links" => "1", o.links[permission] => "1"})
+            end
+        end
+        {
+            "hash" => o.links[permission],
+            "permission" => permission,
+            "owner" => owner,
+            "path" => path
+        }
+    end
+
+    def self.get(db : Bcdb::Client, hash : String)
+        ids = db.find({hash => "1"})
+        res = Hash(String, String).new
+
+        if ids.size >0
+            o = self.get(db, ids[0].to_u64)
+            o.links.each do |perm, h|
+                if h == hash
+                    res["hash"] = hash
+                    res["permission"] = perm
+                    res["owner"] = o.owner
+                    res["path"] = o.path
+                end
+            end
+        end
+        res
+    end
+
+
+    def self.delete(db : Bcdb::Client, path : String, permission : String = "")
+        ids = db.find({"share" => path, "shared_links" => "1"})
+        if ids.size > 0
+            # delete all
+            if permission == ""
+                db.delete(ids[0])
+            else
+                o = self.get(db, ids[0].to_u64)
+                o.id = ids[0]
+                if o.links.has_key?(permission)
+                    o.links.delete(permission)
+                end
+                if o.links.size == 0
+                    db.delete(ids[0])
+                else
+                    tags = {"share" => path, "shared_links" => "1"}
+                    o.links.each do |perm, hash|
+                        tags[hash] = "1"
+                    end
+                    db.update(ids[0], o.dumps, tags)
+                end
             end
         end
     end
 
-    def self.list(db : Bcdb::Bcdb::Client, path : String)
-        res = db.find({"share" => path})
-        if res.size == 0
-            raise  CrystalDrive::NotFoundError.new
-        else
-            list = [] of self
-            res.each do |id|
-                list << self.get id
+    def self.list(db : Bcdb::Client, path : String)
+        ids = db.find({"share" => path, "shared_links" => "1"})
+        res = Array(Hash(String, String)).new
+
+        if ids.size >0
+            o = self.get(db, ids[0].to_u64)
+            o.links.each do |perm, hash|
+                res << {
+                    "hash" => hash,
+                    "permission" => perm,
+                }
             end
-            return list
         end
+        res
     end
 end
 

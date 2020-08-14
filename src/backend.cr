@@ -275,12 +275,24 @@ class CrystalDrive::Backend
         CrystalDrive::Share.delete(STORE.db, path)
     end
 
-    def self.share_link_create(path : String, permission : String, owner : String)
-        CrystalDrive::ShareLink.new(path, permission, owner)
+    def self.share_link_get(path : String, permission : String, owner : String)
+        share_info = CrystalDrive::ShareLink.get(STORE.db, path, permission, owner)
     end
 
-    def self.share_link_get(uuid : String)
-        CrystalDrive::ShareLink.get(STORE.db, uuid)
+    def self.share_links_get(path : String)
+        CrystalDrive::ShareLink.list(STORE.db, path)
+    end
+
+    def self.share_link_create(hash : String, current_user : String)
+        share_info = CrystalDrive::ShareLink.get(STORE.db, hash)
+        perm = {current_user =>  share_info["permission"]}
+        self.share(share_info["path"], share_info["owner"], perm)
+        share_info
+    end
+
+    def self.share_link_delete(path : String, permission : String, current_user : String)
+        self.share_delete(path, current_user)
+        CrystalDrive::ShareLink.delete(STORE.db, path, permission)
     end
 
     def self.user_add(username : String, email : String)

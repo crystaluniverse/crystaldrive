@@ -539,8 +539,9 @@ delete "/api/share/*" do |env|
     CrystalDrive::Backend.share_delete(file, env.session.string("username"))
 end
 
+# Create a sharing link
 get "/api/share/link/*" do |env|
-  file = URI.decode(env.request.path.sub("/api/share", ""))
+  file = URI.decode(env.request.path.sub("/api/share/link", ""))
   file = prefix_paths(env, file)
   env.response.content_type = "text/plain; charset=utf-8"
   env.response.headers.add("X-Renew-Token", "true")
@@ -558,25 +559,72 @@ get "/api/share/link/*" do |env|
   end
 
   begin
-    CrystalDrive::Backend.share_link_create(file, env.get("permission").as(String), env.session.string("username"))
+    CrystalDrive::Backend.share_link_get(file, env.get("permission").as(String), env.session.string("username"))
   rescue CrystalDrive::NotFoundError
     halt env, status_code: 409, response: "not found"
   end
 end
 
-get "/shared/:uuid" do |env|
+# list sharing links
+get "/api/share/links/*" do |env|
+  file = URI.decode(env.request.path.sub("/api/share/links", ""))
+  file = prefix_paths(env, file)
+  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.headers.add("X-Renew-Token", "true")
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
+
+  is_file = CrystalDrive::Backend.file_exists? file
+  is_dir = CrystalDrive::Backend.dir_exists? file
+
+  if ! is_file && ! is_dir
+    halt env, status_code: 409, response: "not found"
+  end
+
+  begin
+    CrystalDrive::Backend.share_links_get(file)
+  rescue CrystalDrive::NotFoundError
+    halt env, status_code: 409, response: "not found"
+  end
+end
+
+# delete sharing link
+delete "/api/share/link/*" do |env|
+  file = URI.decode(env.request.path.sub("/api/share/link", ""))
+  file = prefix_paths(env, file)
+  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.headers.add("X-Renew-Token", "true")
+  env.response.headers.add("X-Content-Type-Options", "nosniff")
+
+  is_file = CrystalDrive::Backend.file_exists? file
+  is_dir = CrystalDrive::Backend.dir_exists? file
+
+  # empty means delee all
+  permission = ""
+  if !env.get?("permission").nil?
+    permission = env.get("permission").to_s
+  end
+
+  if ! is_file && ! is_dir
+    halt env, status_code: 409, response: "not found"
+  end
+
+  begin
+    CrystalDrive::Backend.share_link_delete(file,  permission, env.session.string("username"))
+  rescue CrystalDrive::NotFoundError
+    halt env, status_code: 409, response: "not found"
+  end
+end
+
+get "/shared/:hash" do |env|
   env.response.content_type = "text/plain; charset=utf-8"
   env.response.headers.add("X-Renew-Token", "true")
   env.response.headers.add("X-Content-Type-Options", "nosniff")
 
   begin
-    o = CrystalDrive::Backend.share_link_get(env.params.url["uuid"])
-    path = o.path
-    perm = {env.session.string("username") =>  o.permission}
-    CrystalDrive::Backend.share(o.path, o.owner, perm)
+    o = CrystalDrive::Backend.share_link_create(env.params.url["hash"], env.session.string("username"))
     # rediect to user shared dir
     env.response.status_code = 302
-    env.response.headers.add("Location", "/files/shared/#{o.owner}")
+    env.response.headers.add("Location", "/files/shared/#{o["owner"]}")
   rescue CrystalDrive::NotFoundError
     halt env, status_code: 409, response: "not found"
   end
