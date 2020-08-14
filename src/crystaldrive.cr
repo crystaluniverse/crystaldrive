@@ -215,8 +215,12 @@ get "/api/resources/*" do |env|
   env.response.content_type = "application/json; charset=utf-8"
   env.response.headers["X-Renew-Token"] =  "true"
 
-  if list 
-    CrystalDrive::Backend.list(path).to_json
+  if list
+    begin
+      CrystalDrive::Backend.list(path).to_json
+    rescue CrystalStore::FileNotFoundError
+      halt env, status_code: 404, response: "Not found"
+    end
   else
     stats = CrystalDrive::Backend.file_stats(path)
     if stats.itemType == "text"
@@ -490,8 +494,7 @@ post "/api/share/*" do |env|
   env.params.json["_json"].as(Array).each do |item|
     shares[item["name"].to_s] = item["permission"].to_s
   end
-  CrystalDrive::Backend.share(file, env.session.string("username"), shares)
-  shares
+  CrystalDrive::Backend.share(file, env.session.string("username"), shares).to_json
 end
 
 get "/api/share/*" do |env|
@@ -533,7 +536,7 @@ delete "/api/share/*" do |env|
   if ! is_file && ! is_dir
     halt env, status_code: 409, response: "not found"
   end
-    CrystalDrive::Backend.share_delete(file)
+    CrystalDrive::Backend.share_delete(file, env.session.string("username"))
 end
 
 get "/api/share/link/*" do |env|

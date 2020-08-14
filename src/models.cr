@@ -87,8 +87,9 @@ class CrystalDrive::Share < CrystalDrive::Model
     end
 
     def self.delete(db : Bcdb::Client, path)
-        db.find({"share" => path}).each do |item_id|
-            db.delete(item_id)
+        ids = db.find({"share" => path})
+        if ids.size > 0
+            db.delete(ids[0])
         end
     end
 end

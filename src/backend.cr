@@ -129,6 +129,7 @@ class CrystalDrive::Backend
             else
                 file_meta = STORE.file_stats(link.src)
                 file = CrystalStore::File.new basename, meta: file_meta
+                file.id = file_meta.not_nil!.id
                 files << file
             end
         end
@@ -176,7 +177,6 @@ class CrystalDrive::Backend
                 result.num_dirs -= 1_u64 # skip shared with me 
                 next
             end
-
             item = CrystalDrive::Item.new
             item.name = dir.meta.not_nil!.name.not_nil!
             item.size = dir.meta.not_nil!.size
@@ -222,8 +222,13 @@ class CrystalDrive::Backend
                 share.permissions[name] = perm
             end
         end
+        
+        if share.permissions.size > 0
+            share.save(STORE.db)
+        else
+            CrystalDrive::Share.delete(STORE.db, path)
+        end
 
-        share.save(STORE.db)
         basename = Path.new(path).basename
 
         newly_added_users.each do |user|
@@ -248,17 +253,25 @@ class CrystalDrive::Backend
             rescue CrystalStore::FileExistsError
             end
         end
-
         deleted_users.each do |user|
-            STORE.unlink "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
+            begin
+                STORE.unlink "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
+            rescue CrystalStore::FileNotFoundError
+            end
         end
+        share.permissions
     end
 
     def self.share_get(path : String)
         CrystalDrive::Share.get(STORE.db, path)
     end
 
-    def self.share_delete(path : String)
+    def self.share_delete(path : String, current_user : String)
+        basename = Path.new(path).basename
+        share = CrystalDrive::Share.get(STORE.db, path)
+        share.permissions.each do |user, perm|
+            STORE.unlink "/#{user}/#{@@shared_with_me_dirname}/#{current_user}/#{basename}"
+        end
         CrystalDrive::Share.delete(STORE.db, path)
     end
 
