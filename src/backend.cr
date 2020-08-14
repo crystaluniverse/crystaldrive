@@ -286,12 +286,16 @@ class CrystalDrive::Backend
     def self.share_link_create(hash : String, current_user : String)
         share_info = CrystalDrive::ShareLink.get(STORE.db, hash)
         perm = {current_user =>  share_info["permission"]}
-        self.share(share_info["path"], share_info["owner"], perm)
+        # if user has no previous share, create
+        # if user has previous share with less privileges, update
+        
+        # self.share(share_info["path"], share_info["owner"], perm)
         share_info
     end
 
     def self.share_link_delete(path : String, permission : String, current_user : String)
-        self.share_delete(path, current_user)
+        # ddelete only if the only share user has is link
+        # self.share_delete(path, current_user)
         CrystalDrive::ShareLink.delete(STORE.db, path, permission)
     end
 

@@ -598,7 +598,7 @@ delete "/api/share/link/*" do |env|
   is_file = CrystalDrive::Backend.file_exists? file
   is_dir = CrystalDrive::Backend.dir_exists? file
 
-  # empty means delee all
+  # empty means delete all
   permission = ""
   if !env.get?("permission").nil?
     permission = env.get("permission").to_s
