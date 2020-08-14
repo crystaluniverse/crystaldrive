@@ -543,14 +543,14 @@ end
 get "/api/share/link/*" do |env|
   file = URI.decode(env.request.path.sub("/api/share/link", ""))
   file = prefix_paths(env, file)
-  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.content_type = "application/json"
   env.response.headers.add("X-Renew-Token", "true")
   env.response.headers.add("X-Content-Type-Options", "nosniff")
 
   is_file = CrystalDrive::Backend.file_exists? file
   is_dir = CrystalDrive::Backend.dir_exists? file
-
-  if env.get?("permission").nil?
+  
+  if !env.params.query.has_key?("permission")
     halt env, status_code: 409, response: "Permission missing"
   end
 
@@ -559,7 +559,7 @@ get "/api/share/link/*" do |env|
   end
 
   begin
-    CrystalDrive::Backend.share_link_get(file, env.get("permission").as(String), env.session.string("username"))
+    CrystalDrive::Backend.share_link_get(file, env.params.query["permission"].as(String), env.session.string("username")).to_json
   rescue CrystalDrive::NotFoundError
     halt env, status_code: 409, response: "not found"
   end
@@ -569,7 +569,7 @@ end
 get "/api/share/links/*" do |env|
   file = URI.decode(env.request.path.sub("/api/share/links", ""))
   file = prefix_paths(env, file)
-  env.response.content_type = "text/plain; charset=utf-8"
+  env.response.content_type = "application/json"
   env.response.headers.add("X-Renew-Token", "true")
   env.response.headers.add("X-Content-Type-Options", "nosniff")
 
@@ -581,7 +581,7 @@ get "/api/share/links/*" do |env|
   end
 
   begin
-    CrystalDrive::Backend.share_links_get(file)
+    CrystalDrive::Backend.share_links_get(file).to_json
   rescue CrystalDrive::NotFoundError
     halt env, status_code: 409, response: "not found"
   end
