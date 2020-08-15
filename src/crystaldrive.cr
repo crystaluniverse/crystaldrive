@@ -541,8 +541,8 @@ end
 
 # Create a sharing link
 get "/api/share/link/*" do |env|
-  file = URI.decode(env.request.path.sub("/api/share/link", ""))
-  file = prefix_paths(env, file)
+  path = URI.decode(env.request.path.sub("/api/share/link", ""))
+  file = prefix_paths(env, path)
   env.response.content_type = "application/json"
   env.response.headers.add("X-Renew-Token", "true")
   env.response.headers.add("X-Content-Type-Options", "nosniff")
@@ -559,7 +559,9 @@ get "/api/share/link/*" do |env|
   end
 
   begin
-    CrystalDrive::Backend.share_link_get(file, env.params.query["permission"].as(String), env.session.string("username")).to_json
+    res = CrystalDrive::Backend.share_link_get(file, env.params.query["permission"].as(String), env.session.string("username"))
+    res["path"] = path
+    res.to_json
   rescue CrystalDrive::NotFoundError
     halt env, status_code: 409, response: "not found"
   end
@@ -567,8 +569,8 @@ end
 
 # list sharing links
 get "/api/share/links/*" do |env|
-  file = URI.decode(env.request.path.sub("/api/share/links", ""))
-  file = prefix_paths(env, file)
+  path = URI.decode(env.request.path.sub("/api/share/links", ""))
+  file = prefix_paths(env, path)
   env.response.content_type = "application/json"
   env.response.headers.add("X-Renew-Token", "true")
   env.response.headers.add("X-Content-Type-Options", "nosniff")
@@ -581,7 +583,12 @@ get "/api/share/links/*" do |env|
   end
 
   begin
-    CrystalDrive::Backend.share_links_get(file).to_json
+    res = CrystalDrive::Backend.share_links_get(file)
+    # put again original path, remove prefix;
+    res.each do |item|
+      item["path"] = path
+    end
+    res.to_json
   rescue CrystalDrive::NotFoundError
     halt env, status_code: 409, response: "not found"
   end
@@ -600,8 +607,8 @@ delete "/api/share/link/*" do |env|
 
   # empty means delete all
   permission = ""
-  if !env.get?("permission").nil?
-    permission = env.get("permission").to_s
+  if env.params.query.has_key?("permission")
+    permission =  env.params.query["permission"]
   end
 
   if ! is_file && ! is_dir

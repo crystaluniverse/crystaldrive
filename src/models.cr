@@ -104,18 +104,18 @@ class CrystalDrive::ShareLink < CrystalDrive::Model
     def initialize(@path, @owner); end
 
     def self.get(db : Bcdb::Client, path : String, permission : String, owner : String)
-        ids = db.find({"share" => path, "shared_links" => "1"})
+        ids = db.find({"share_link_path" => path, "shared_links" => "1"})
         if ids.size == 0
             o = self.new(path, owner)
             o.links[permission] = UUID.random.to_s
-            key = db.put(o.dumps, {"share" => path, "shared_links" => "1", o.links[permission] => "1"})
+            key = db.put(o.dumps, {"share_link_path" => path, "shared_links" => "1", o.links[permission] => "1"})
             o.id = key
         else
             o = self.get(db, ids[0].to_u64)
             o.id = ids[0]
             if !o.links.has_key?(permission)
                 o.links[permission] = UUID.random.to_s
-                db.update(ids[0], o.dumps, {"share" => path, "shared_links" => "1", o.links[permission] => "1"})
+                db.update(ids[0], o.dumps, {"share_link_path" => path, "shared_links" => "1", o.links[permission] => "1"})
             end
         end
         {
@@ -146,7 +146,7 @@ class CrystalDrive::ShareLink < CrystalDrive::Model
 
 
     def self.delete(db : Bcdb::Client, path : String, permission : String = "")
-        ids = db.find({"share" => path, "shared_links" => "1"})
+        ids = db.find({"share_link_path" => path, "shared_links" => "1"})
         if ids.size > 0
             # delete all
             if permission == ""
@@ -160,7 +160,7 @@ class CrystalDrive::ShareLink < CrystalDrive::Model
                 if o.links.size == 0
                     db.delete(ids[0])
                 else
-                    tags = {"share" => path, "shared_links" => "1"}
+                    tags = {"share_link_path" => path, "shared_links" => "1"}
                     o.links.each do |perm, hash|
                         tags[hash] = "1"
                     end
@@ -171,7 +171,7 @@ class CrystalDrive::ShareLink < CrystalDrive::Model
     end
 
     def self.list(db : Bcdb::Client, path : String)
-        ids = db.find({"share" => path, "shared_links" => "1"})
+        ids = db.find({"share_link_path" => path, "shared_links" => "1"})
         res = Array(Hash(String, String)).new
 
         if ids.size >0
