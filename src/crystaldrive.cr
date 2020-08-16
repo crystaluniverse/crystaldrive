@@ -45,7 +45,7 @@ private def zip_files(files : Array(String))
       path = file.path
     Zip::Writer.open(file) do |zip|
       files.each do |file|
-        stats = CrystalDrive::Backend.file_stats(file)
+        stats = CrystalDrive::Backend.file_stats("",file)
         f = CrystalDrive::Backend.file_open(file, 755)
         s = Bytes.new(stats.size)
         f.read s
@@ -204,8 +204,8 @@ end
 
 # list or stats
 get "/api/resources/*" do |env|
-  path = URI.decode(env.request.path.gsub("/api/resources", ""))
-  path = prefix_paths(env, path)
+  orig_path = URI.decode(env.request.path.gsub("/api/resources", ""))
+  path = prefix_paths(env, orig_path)
   list = false
 
   if env.request.path.ends_with?('/')
@@ -222,7 +222,7 @@ get "/api/resources/*" do |env|
       halt env, status_code: 404, response: "Not found"
     end
   else
-    stats = CrystalDrive::Backend.file_stats(path)
+    stats = CrystalDrive::Backend.file_stats(orig_path, path)
     if stats.itemType == "text"
       f = CrystalDrive::Backend.file_open(path, 755)
       s = Bytes.new(stats.size)
@@ -401,15 +401,15 @@ end
 
 # Download_file
 get "/api/raw/*" do |env|
-  path = URI.decode(env.request.path.gsub("/api/raw", ""))
-  path = prefix_paths(env, path)
+  orig_path = URI.decode(env.request.path.gsub("/api/raw", ""))
+  path = prefix_paths(env, orig_path)
 
   if path.ends_with?('/')
       env.response.status_code = 302
       env.response.headers.add("Location", "/api/raw/?files=" + path)
   else
       inline = env.params.query.has_key?("inline") == true
-      stats = CrystalDrive::Backend.file_stats(path)
+      stats = CrystalDrive::Backend.file_stats(orig_path, path)
       if inline
           env.response.headers["Content-Disposition"] = "inline"
           env.response.headers["Accept-Ranges"] = "bytes"
@@ -490,11 +490,21 @@ post "/api/share/*" do |env|
     halt env, status_code: 409, response: "not found"
   end
 
-  shares = Hash(String, String).new
+  shares = Hash(String, Hash(String, String)).new
   env.params.json["_json"].as(Array).each do |item|
-    shares[item["name"].to_s] = item["permission"].to_s
+    v = Hash(String, String).new
+    v["user"] = item["permission"].to_s
+    shares[item["name"].to_s] = v 
   end
-  CrystalDrive::Backend.share(file, env.session.string("username"), shares).to_json
+  # only return user share info in this case
+  res = Hash(String, String).new
+  share_info = CrystalDrive::Backend.share(file, env.session.string("username"), shares)
+  share_info.each do |name, v|
+    if v.has_key?("user")
+      res[name] = v["user"]
+    end
+  end
+  res.to_json
 end
 
 get "/api/share/*" do |env|
@@ -515,7 +525,9 @@ get "/api/share/*" do |env|
     share = CrystalDrive::Backend.share_get(file)
     result = Array(Hash(String, String)).new
     share.permissions.each do |k, v|
-      result << {"name" => k, "permission" => v}
+      if v.has_key?("user")
+        result << {"name" => k, "permission" => v["user"]}
+      end
     end
     result.to_json
   rescue CrystalDrive::UserNotFoundError
@@ -536,7 +548,7 @@ delete "/api/share/*" do |env|
   if ! is_file && ! is_dir
     halt env, status_code: 409, response: "not found"
   end
-    CrystalDrive::Backend.share_delete(file, env.session.string("username"))
+    CrystalDrive::Backend.share_delete(file, env.session.string("username"), "user")
 end
 
 # Create a sharing link
@@ -631,9 +643,9 @@ get "/shared/:hash" do |env|
     o = CrystalDrive::Backend.share_link_create(env.params.url["hash"], env.session.string("username"))
     # rediect to user shared dir
     env.response.status_code = 302
-    env.response.headers.add("Location", "/files/shared/#{o["owner"]}")
+    env.response.headers.add("Location", "/files/shared/#{o["owner"]}/")
   rescue CrystalDrive::NotFoundError
-    halt env, status_code: 409, response: "not found"
+    halt env, status_code: 404, response: "not found"
   end
 end
 

@@ -57,7 +57,7 @@ end
 class CrystalDrive::Share < CrystalDrive::Model
     include JSON::Serializable
 
-    property permissions : Hash(String, String) # user_name => permission
+    property permissions : Hash(String, Hash(String, String)) # user_name => {"rw-":"user", "rwd":"link"}
     property path : String
     property id : UInt64? = nil
 
@@ -70,7 +70,7 @@ class CrystalDrive::Share < CrystalDrive::Model
     def self.get(db : Bcdb::Client, path : String)
         ids = db.find({"share" => path})
         if ids.size == 0
-           p = Hash(String, String).new
+           p = Hash(String, Hash(String, String)).new
            return self.new(path, p)
         end
         o = self.get(db, ids[0].to_u64)
