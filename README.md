@@ -44,3 +44,8 @@ crystal  run src/crystaldrive.cr
 
 ## FOR API TESTING
 Set `export DEV_MODE=true` before starting
+
+
+## Flist
+
+Cab be found [HERE](https://github.com/threefoldtech/tf-images/tree/master/crystal_drive). Please ignore if you don't know what is an flist is!
