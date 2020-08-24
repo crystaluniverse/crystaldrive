@@ -2,9 +2,8 @@ require "uri"
 require "kemal"
 require "kemal-session"
 require "kemal-session-bcdb"
-require "zip"
 require "./init"
-
+require "compress/zip"
 require "./backend"
 require "crystalstore"
 require "./auth"
@@ -43,7 +42,7 @@ private def zip_files(files : Array(String))
   path = ""
   File.tempfile("zipfile") do |file|
       path = file.path
-    Zip::Writer.open(file) do |zip|
+      Compress::Zip::Writer.open(file) do |zip|
       files.each do |file|
         stats = CrystalDrive::Backend.file_stats("",file)
         f = CrystalDrive::Backend.file_open(file, 755)
@@ -152,10 +151,15 @@ get "/login/" do |env|
   HOME
 end
 
-# Login
+# API Login (Dev only)
 post "/api/login" do |env|
   env.response.content_type = "cty"
-  # halt env, status_code: 403, response: "403 Forbidden"
+  begin
+    env_mode = ENV["DEV_MODE"]
+  rescue exception
+    halt env, status_code: 403, response: "403 Forbidden"
+  end
+
   username = "h4mdy"
   email = "kk@sd.com"
   token = CrystalDrive::Token.generate_token(username, email, "en", "mosaic", {"admin" => true, "execute" => true, "create" => true, "rename" => true, "modify" => true, "delete" => true,  "share" => true, "download"=> true}, false, Array(String).new)

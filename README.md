@@ -41,3 +41,6 @@ export ONLY_OFFICE_HOST=127.0.0.1
 ```
 crystal  run src/crystaldrive.cr
 ```
+
+## FOR API TESTING
+Set `export DEV_MODE=true` before starting
