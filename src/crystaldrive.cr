@@ -106,6 +106,10 @@ private def prefix_paths(env, path)
   %(/#{env.session.string("username")}#{path})
 end
 
+private def has_permissions?(username : String, path : String, permission : String)
+  CrystalDrive::Backend.has_permission?(username, path, permission)
+end
+
 before_all "/api/*" do |env|
   if env.session.string?("username").nil?
     if !env.params.query.has_key?("auth")
@@ -210,6 +214,11 @@ end
 get "/api/resources/*" do |env|
   orig_path = URI.decode(env.request.path.gsub("/api/resources", ""))
   path = prefix_paths(env, orig_path)
+  
+  if !has_permissions?(env.session.string("username"), path, "r")
+    halt env, status_code: 403, response: "Permission denied"
+  end
+
   list = false
 
   if env.request.path.ends_with?('/')
@@ -239,45 +248,44 @@ end
 
 # Create dir / file
 post "/api/resources/*" do |env|
-  dir = env.request.path.gsub("/api/resources", "")
-  dir = URI.decode(dir)
-  dir = prefix_paths(env, dir)
-  override = ! env.get?("override").nil?
+  path = env.request.path.gsub("/api/resources", "")
+  item = URI.decode(path)
+  item = prefix_paths(env, item)
+  
+  if !has_permissions?(env.session.string("username"), item, "w")
+    halt env, status_code: 403, response: "Permission denied"
+  end
 
-  if dir.ends_with?("/")
+  override = env.params.query.has_key?("override") ? true : false
+
+  if item.ends_with?("/")
     begin
-      CrystalDrive::Backend.dir_create(dir, 755, create_parents=true)
+      CrystalDrive::Backend.dir_create(item, 755, create_parents=true)
     rescue CrystalStore::FileExistsError; 
       if ! override
         halt env, status_code: 409, response: "Already exists"
       else
         env.response.content_type = "text/plain; charset=utf-8"
-        
         env.response.headers["X-Content-Type-Options"] ="nosniff"
       end
     end
   else    
-    file = env.request.path.gsub("/api/resources", "")
-    file = URI.decode(file)
-    file = prefix_paths(env, file)
-    override = env.params.query.has_key?("override") ? true : false
     env.response.content_type = "text/plain; charset=utf-8"
     env.response.headers["X-Content-Type-Options"] ="nosniff"
-    
     content_type = "application/octet-stream"
     if env.request.headers.has_key?("Content-Type")
       content_type = env.request.headers["Content-Type"]
     end
 
     begin
-      CrystalDrive::Backend.file_create(file, 755, content_type, create_parents=true)
+      CrystalDrive::Backend.file_create(item, 755, content_type, create_parents=true)
     rescue CrystalStore::FileExistsError
       if !override
         halt env, status_code: 409, response: "Already exists"
       end
     end
     
-    f = CrystalDrive::Backend.file_open file, 755
+    f = CrystalDrive::Backend.file_open item, 755
     f.set_conten_type content_type
     IO.copy(env.request.body.not_nil!, f)
     f.close
@@ -290,6 +298,11 @@ end
 delete "/api/resources/*" do |env|
   path = URI.decode(env.request.path.gsub("/api/resources", ""))
   path = prefix_paths(env, path)
+
+  if !has_permissions?(env.session.string("username"), path, "d")
+    halt env, status_code: 403, response: "Permission denied"
+  end
+
   env.response.content_type = "text/plain; charset=utf-8"
   env.response.headers["X-Renew-Token"] = "true"
   env.response.headers["X-Content-Type-Options"] ="nosniff"
@@ -333,8 +346,34 @@ patch "/api/resources/*" do |env|
   if src.ends_with?("/")
     begin
       if action == "copy"
+        if !has_permissions?(env.session.string("username"), src, "r")
+          halt env, status_code: 403, response: "Permission denied"
+        end
+      
+        if !has_permissions?(env.session.string("username"), dest, "w")
+          halt env, status_code: 403, response: "Permission denied"
+        end
+
         CrystalDrive::Backend.dir_copy(src, dest)
       elsif action == "rename" || action == "move"
+        if !has_permissions?(env.session.string("username"), src, "r")
+          halt env, status_code: 403, response: "Permission denied"
+        end
+      
+        if action == "rename"
+          if !has_permissions?(env.session.string("username"), src, "rw")
+            halt env, status_code: 403, response: "Permission denied"
+          end
+        end
+
+        if action == "move"
+          if !has_permissions?(env.session.string("username"), src, "rd")
+            halt env, status_code: 403, response: "Permission denied"
+          end
+          if !has_permissions?(env.session.string("username"), dest, "w")
+            halt env, status_code: 403, response: "Permission denied"
+          end
+        end
         CrystalDrive::Backend.dir_move(src, dest)
       end
     rescue ex1: CrystalStore::FileNotFoundError
@@ -361,6 +400,10 @@ end
 put "/api/resources/*" do |env|
   file = URI.decode(env.request.path.sub("/api/resources", ""))
   file = prefix_paths(env, file)
+  if !has_permissions?(env.session.string("username"), file, "w")
+    halt env, status_code: 403, response: "Permission denied"
+  end
+
   env.response.content_type = "text/plain; charset=utf-8"
   env.response.headers.add("X-Renew-Token", "true")
   env.response.headers.add("X-Content-Type-Options", "nosniff")
@@ -408,6 +451,10 @@ get "/api/raw/*" do |env|
   orig_path = URI.decode(env.request.path.gsub("/api/raw", ""))
   path = prefix_paths(env, orig_path)
 
+  if !has_permissions?(env.session.string("username"), path, "r")
+    halt env, status_code: 403, response: "Permission denied"
+  end
+
   if path.ends_with?('/')
       env.response.status_code = 302
       env.response.headers.add("Location", "/api/raw/?files=" + path)
@@ -435,6 +482,9 @@ get "/api/preview/thumb/*" do |env|
   path = URI.decode(env.request.path.gsub("/api/preview/thumb", ""))
   path = prefix_paths(env, path)
 
+  if !has_permissions?(env.session.string("username"), path, "r")
+    halt env, status_code: 403, response: "Permission denied"
+  end
 
   f = CrystalDrive::Backend.file_open(path, 755)
   s = Bytes.new(f.file.meta.not_nil!.size)
@@ -448,6 +498,11 @@ end
 get "/api/preview/big/*" do |env|
   path = URI.decode(env.request.path.gsub("/api/preview/big", ""))
   path = prefix_paths(env, path)
+  
+  if !has_permissions?(env.session.string("username"), path, "r")
+    halt env, status_code: 403, response: "Permission denied"
+  end
+
   f = CrystalDrive::Backend.file_open(path, 755)
   s = Bytes.new(f.file.meta.not_nil!.size)
   f.read s

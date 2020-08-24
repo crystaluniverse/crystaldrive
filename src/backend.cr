@@ -325,6 +325,61 @@ class CrystalDrive::Backend
         self.share_delete(path, current_user, "link")
     end
 
+    def self.has_permission?(username : String, path : String, permission : String )
+        path = path.gsub("/#{username}/#{self.get_shared_with_me_dirname}", "")
+
+        if path.starts_with?("/#{username}")
+            return true
+        end
+
+        # Arrange permissions to be as in "rwd"
+        
+        p = ""
+        
+        if permission.includes?("r")
+            p += "r"
+        end
+
+        if permission.includes?("w")
+            p += "w"
+        end
+
+        if permission.includes?("d")
+            p += "d"
+        end
+
+        permission = p
+
+        paths = Array(String){path}
+        parts = Path.new(path).parts
+        
+        parts.pop
+        
+        while parts.size > 2
+            paths << "#{Path.new(parts).to_s}/"
+            parts.pop
+        end
+
+        paths.each do |path|
+            perm_obj = CrystalDrive::Share.get(STORE.db, path)
+            found = perm_obj.permissions.size > 0
+            # check parent permissions if this specific path has no sharing for this user
+            if !found || !perm_obj.permissions.has_key? username
+                next
+            end
+
+            if perm_obj.permissions[username].has_key?("user") && perm_obj.permissions[username]["user"].includes?(permission)
+                return true
+            elsif perm_obj.permissions[username].has_key?("link") && perm_obj.permissions[username]["link"].includes?(permission)
+                return true
+            else
+                # user exists in permission set of parent, but does not have this permission
+                return false
+            end
+        end
+        return false
+    end
+
     def self.user_add(username : String, email : String)
         u = CrystalDrive::AuthUser.new username: username, email: email
         u.save(STORE.db)
