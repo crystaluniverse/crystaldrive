@@ -18,8 +18,12 @@ usage: ./build -u --ui (Install all dependencies and build ui
 ```
 
 # Make sure onlyoffice document server is running
+Only locally or in development, you can start a document server for testing using the docker image below, however in production you should be able to use the public document server
+by setting the env variable `export ONLY_OFFICE_HOST=<DOCSERVER_URL>`
 ```
 docker run -i -t -d -p 80:80 -v /home/hamdy/onlyoffice/data:/var/www/onlyoffice/Data onlyoffice/documentserver
+
+export ONLY_OFFICE_HOST=127.0.0.1
 ```
 
 ## Run
